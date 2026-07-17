@@ -22,6 +22,7 @@ ACTION SCHEMA (consumed — see planner.py for producers)
 from __future__ import annotations
 
 from .project_graph import ProjectGraph, Clip
+from . import _ffmpeg as _ff
 from typing import List, Dict, Optional
 
 
@@ -206,6 +207,7 @@ def _apply_split(graph: ProjectGraph, act: dict) -> None:
             f"Split point {at_time} outside clip range [{clip.start}, {clip.end}]"
         )
 
+    import uuid
     new_clip = Clip(
         source=clip.source,
         start=at_time,
@@ -213,10 +215,15 @@ def _apply_split(graph: ProjectGraph, act: dict) -> None:
         source_start=clip.source_start + (at_time - clip.start),
         track=clip.track,
     )
+    new_clip.id = f"clip:{uuid.uuid4().hex[:8]}"
     graph.add(new_clip)
     clip.end = at_time
 
-    # Re-parent nodes to the correct clip
+    # Re-parent nodes to the correct clip.
+    # Children with start >= at_time → new_clip.
+    # Children that overlap both halves → keep on original (rare case).
+    # Always REMOVE old edge before adding the new one (avoid duplicates).
+    edges_to_remove = []
     for nid in list(graph.nodes.keys()):
         node = graph.nodes.get(nid)
         if not node or not hasattr(node, 'start'):
@@ -226,13 +233,56 @@ def _apply_split(graph: ProjectGraph, act: dict) -> None:
         if not _is_linked(graph, clip_id, nid):
             continue
         if node.start >= at_time:
-            # Move to new clip
-            rels = graph.relationships(nid)
-            for edge in rels:
+            # Find existing edge from clip_id to nid, mark for removal
+            for edge in graph.relationships(nid):
                 if edge.source == clip_id and edge.target == nid:
-                    # Remove old edge by removing and re-adding (simplified)
-                    pass
-            graph.add_edge(new_clip.id, nid, "contains")
+                    edges_to_remove.append((edge.source, edge.target, edge.relation))
+                    break
+            # Add the new edge to new_clip
+            graph.add_edge(new_clip.id, nid, "contains_scene")
+
+    # Remove old edges (separate pass to avoid mutating during iteration)
+    for src, tgt, rel in edges_to_remove:
+        if src in graph._out and (tgt, rel) in graph._out[src]:
+            graph._out[src] = [(t, r) for t, r in graph._out[src]
+                                 if not (t == tgt and r == rel)]
+        if tgt in graph._in and (src, rel) in graph._in[tgt]:
+            graph._in[tgt] = [(s, r) for s, r in graph._in[tgt]
+                                 if not (s == src and r == rel)]
+
+
+def _apply_trim(graph: ProjectGraph, act: dict) -> None:
+    """Trim creates a new clip from the source clip keeping only [start, end].
+
+    The source clip is identified by the parent-child link: all child nodes
+    within [start, end] are re-parented to the new clip. The original clip
+    stays; subsequent trims on the same source also create new clips.
+    This allows multiple trims from one source (e.g. cut silences).
+    """
+    source_clip_id = act["clip"]
+    s, e = act["start"], act["end"]
+
+    # Validate
+    if s >= e:
+        raise ValueError(
+            f"trim: start ({s}) must be < end ({e})"
+        )
+    if e - s < 0.01:
+        raise ValueError(
+            f"trim: range too small ({e - s:.3f}s)"
+        )
+
+    source_clip = _find_clip(graph, source_clip_id)
+    if not source_clip:
+        raise ValueError(f"Clip {source_clip_id} not found")
+
+    # Clamp to source clip range
+    s = max(s, source_clip.start)
+    e = min(e, source_clip.end)
+    if s >= e:
+        raise ValueError(
+            f"trim: range [{s}, {e}] outside source clip [{source_clip.start}, {source_clip.end}]"
+        )
 
 
 def _apply_ripple(graph: ProjectGraph, act: dict) -> None:
@@ -314,7 +364,7 @@ def _build_render(graph: ProjectGraph) -> List[str]:
     output_name = f"{graph.name}_edited.mp4" if hasattr(graph, 'name') else "output_edited.mp4"
 
     cmd = [
-        "ffmpeg", "-y",
+        _ff.ffmpeg_path(), "-y",
         "-i", source,
         "-filter_complex", filter_graph,
         "-map", "[outv]", "-map", "[outa]",
