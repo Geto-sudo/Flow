@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flow.dev/schemas/events/event.v1.json",
+  "version": "1.0.0",
+  "title": "Flow Event",
+  "description": "The shape of every event emitted by a Flow runtime. See events/event-codes.md for the catalog of codes.",
+  "status": "Draft",
+
+  "type": "object",
+  "required": ["id", "ts", "code", "name", "category"],
+  "additionalProperties": true,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^evt_[0-9a-f]{32}$"
+    },
+    "ts": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "code": {
+      "type": "string",
+      "pattern": "^FLOW_EVT_[0-9]{3}$"
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Za-z0-9]+$"
+    },
+    "category": {
+      "enum": ["lifecycle", "progress", "error", "system"]
+    },
+    "project_id": {
+      "type": "string",
+      "pattern": "^proj_[0-9a-f]{32}$"
+    },
+    "actor": {
+      "type": "string",
+      "pattern": "^(agent:[a-zA-Z0-9._-]+|user:[a-zA-Z0-9._@-]+|plugin:[a-zA-Z0-9._-]+|system)$"
+    },
+    "action_id": {
+      "type": "string",
+      "pattern": "^act_[0-9a-f]{32}$"
+    },
+    "data": {
+      "description": "Event-specific payload. Schema depends on the code (see event-codes.md).",
+      "type": "object"
+    },
+    "metadata": {
+      "type": "object"
+    }
+  },
+
+  "examples": [
+    {
+      "id": "evt_0123456789abcdef0123456789abcdef",
+      "ts": "2026-07-17T04:00:00.123Z",
+      "code": "FLOW_EVT_030",
+      "name": "ClipCreated",
+      "category": "lifecycle",
+      "project_id": "proj_0123456789abcdef0123456789abcdef",
+      "actor": "agent:claude-sonnet-4.5",
+      "action_id": "act_0123456789abcdef0123456789abcdef",
+      "data": {
+        "clip_id": "clip_aabbccdd00112233aabbccdd00112233",
+        "track_id": "V1",
+        "at": { "value": 0, "rate": 30 }
+      },
+      "metadata": {}
+    },
+    {
+      "id": "evt_0123456789abcdef0123456789abcde0",
+      "ts": "2026-07-17T04:01:30.456Z",
+      "code": "FLOW_EVT_101",
+      "name": "JobProgress",
+      "category": "progress",
+      "project_id": "proj_0123456789abcdef0123456789abcdef",
+      "actor": "system",
+      "data": {
+        "job_id": "job_aabbccdd00112233aabbccdd00112233",
+        "stage": "encoding",
+        "percent": 42.5,
+        "current_frame": 1250,
+        "total_frames": 3000,
+        "eta_seconds": 12
+      },
+      "metadata": {}
+    },
+    {
+      "id": "evt_0123456789abcdef0123456789abcde1",
+      "ts": "2026-07-17T04:02:15.789Z",
+      "code": "FLOW_EVT_103",
+      "name": "JobCompleted",
+      "category": "progress",
+      "project_id": "proj_0123456789abcdef0123456789abcdef",
+      "actor": "system",
+      "data": {
+        "job_id": "job_aabbccdd00112233aabbccdd00112233",
+        "duration_seconds": 87.4,
+        "output_path": "/abs/path/out.mp4",
+        "output_size_bytes": 4194304
+      },
+      "metadata": {}
+    }
+  ]
+}

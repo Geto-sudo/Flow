@@ -1,0 +1,50 @@
+# dependencies
+python/flow_core.egg-info/
+*.egg-info/
+**/__pycache__/
+*.py[cod]
+*.so
+build/
+dist/
+.eggs/
+
+# venvs
+.venv/
+venv/
+env/
+
+# models + test artifacts
+*.pt
+*.pth
+*.onnx
+*.bin
+*.safetensors
+*.flow.json
+*.flow.txt
+!examples/**/*.flow.json
+!examples/**/*.flow.txt
+
+# large test files
+test_fixtures/*.mp4
+test_fixtures/*.wav
+test_fixtures/frames/
+
+# generated test outputs
+test_fixtures/sample_audio.mp4
+test_fixtures/sample.flow.*
+test_fixtures/spoken.flow.*
+test_fixtures/spoken_trimmed.mp4
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# misc
+.deep-copilot/
+*.tmp
+*.bak
+.cache/

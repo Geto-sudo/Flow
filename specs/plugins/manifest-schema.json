@@ -1,0 +1,168 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flow.dev/schemas/plugins/manifest.v1.json",
+  "version": "1.0.0",
+  "title": "Flow Plugin Manifest",
+  "description": "The flow-plugin.toml file that every plugin ships alongside its shared library.",
+  "status": "Draft",
+
+  "type": "object",
+  "required": ["plugin", "targets"],
+  "additionalProperties": false,
+  "properties": {
+    "plugin": {
+      "type": "object",
+      "required": ["id", "name", "version", "api_version"],
+      "properties": {
+        "id": {
+          "description": "Reverse-DNS, globally unique plugin identifier.",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$",
+          "examples": ["com.example.vendor.upscale", "org.flow.community.beat_detect"]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(-[a-zA-Z0-9.]+)?$"
+        },
+        "api_version": {
+          "description": "The plugin ABI major version this plugin targets.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "authors": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "license": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "homepage": {
+          "type": "string",
+          "format": "uri"
+        }
+      }
+    },
+    "targets": {
+      "description": "A map of target triple → relative path of the shared library.",
+      "type": "object",
+      "minProperties": 1,
+      "properties": {
+        "linux_x86_64":   { "type": "string" },
+        "linux_aarch64":  { "type": "string" },
+        "macos_x86_64":   { "type": "string" },
+        "macos_arm64":    { "type": "string" },
+        "windows_x86_64": { "type": "string" }
+      }
+    },
+    "effects": {
+      "description": "Effects declared by this plugin.",
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/effect_decl" }
+    },
+    "media_linkers": {
+      "description": "Media linkers declared by this plugin.",
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/media_linker_decl" }
+    },
+    "ai_backends": {
+      "description": "AI backends declared by this plugin.",
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/ai_backend_decl" }
+    },
+    "schemas": {
+      "description": "OTIO SchemaDef nodes registered by this plugin.",
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/schema_decl" }
+    },
+    "permissions": {
+      "description": "Optional capability-based permissions requested by the plugin.",
+      "type": "object",
+      "properties": {
+        "filesystem": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "network": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  },
+
+  "$defs": {
+    "effect_decl": {
+      "type": "object",
+      "required": ["name", "schema"],
+      "properties": {
+        "name": { "type": "string" },
+        "schema": { "type": "string" },
+        "is_ai": { "type": "boolean", "default": false }
+      }
+    },
+    "media_linker_decl": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string" },
+        "config_schema": { "type": "string" }
+      }
+    },
+    "ai_backend_decl": {
+      "type": "object",
+      "required": ["name", "kind"],
+      "properties": {
+        "name": { "type": "string" },
+        "kind": { "enum": ["local_onnx", "local_libtorch", "remote_http", "webgpu"] },
+        "config_schema": { "type": "string" }
+      }
+    },
+    "schema_decl": {
+      "type": "object",
+      "required": ["path"],
+      "properties": {
+        "path": { "type": "string" }
+      }
+    }
+  },
+
+  "examples": [
+    {
+      "plugin": {
+        "id": "com.example.vendor.upscale",
+        "name": "Vendor AI Upscale",
+        "version": "1.0.0",
+        "api_version": 1,
+        "authors": ["vendor@example.com"],
+        "license": "Apache-2.0",
+        "description": "AI super-resolution for video."
+      },
+      "targets": {
+        "linux_x86_64": "build/libvendor_upscale.so",
+        "macos_arm64": "build/libvendor_upscale.dylib",
+        "windows_x86_64": "build/vendor_upscale.dll"
+      },
+      "effects": {
+        "upscale": {
+          "name": "Vendor AI Upscale",
+          "schema": "schemas/upscale.schema.json",
+          "is_ai": true
+        }
+      },
+      "ai_backends": {
+        "remote_onnx": {
+          "name": "Vendor Remote ONNX",
+          "kind": "remote_http",
+          "config_schema": "schemas/backend.schema.json"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flow.dev/schemas/actions/trim.v1.json",
+  "version": "1.0.0",
+  "title": "Flow Action: clip.trim",
+  "description": "Trims one edge of a clip to a new position. The trim is applied to the clip's source range; the clip's position on the timeline is unchanged. The inverse is another trim that restores the previous value.",
+  "status": "Draft",
+
+  "type": "object",
+  "required": ["op", "clip", "edge", "to"],
+  "additionalProperties": false,
+  "properties": {
+    "op": { "const": "clip.trim" },
+    "clip": {
+      "description": "The ID of the clip to trim.",
+      "type": "string",
+      "pattern": "^clip_[0-9a-f]{32}$"
+    },
+    "edge": {
+      "description": "Which edge to trim.",
+      "enum": ["in", "out"]
+    },
+    "to": {
+      "description": "The new position of the edge, in the clip's source timebase. For 'in' edge, must be less than the current 'out'. For 'out' edge, must be greater than the current 'in'.",
+      "$ref": "#/$defs/rational_time"
+    }
+  },
+
+  "$defs": {
+    "rational_time": {
+      "type": "object",
+      "required": ["value", "rate"],
+      "properties": {
+        "value": { "type": "number" },
+        "rate":  { "type": "number", "exclusiveMinimum": 0 }
+      }
+    }
+  },
+
+  "preconditions": [
+    "The clip must exist in the current timeline (else FLOW_002).",
+    "The trim point must be within the clip's available media range (else FLOW_007).",
+    "After trim, the clip's duration must be > 0 (else FLOW_007).",
+    "After trim, the clip's range must be within the source media's available range (else FLOW_007)."
+  ],
+
+  "effects": [
+    "The clip's source_range is updated.",
+    "The clip's duration is recomputed.",
+    "The timeline emits FLOW_EVT_032 (ClipTrimmed)."
+  ],
+
+  "errors": [
+    { "code": "FLOW_002", "when": "The clip ID does not exist in the project." },
+    { "code": "FLOW_007", "when": "The trim point is invalid (out of bounds, duration <= 0, etc.)." },
+    { "code": "FLOW_015", "when": "Optimistic concurrency check failed (base_state_hash mismatch)." }
+  ],
+
+  "examples": [
+    {
+      "_comment": "Happy path: trim 3 seconds off the in-edge of a 30fps clip.",
+      "value": {
+        "op": "clip.trim",
+        "clip": "clip_aabbccdd00112233aabbccdd00112233",
+        "edge": "in",
+        "to": { "value": 90, "rate": 30 }
+      }
+    },
+    {
+      "_comment": "Happy path: trim 5 seconds off the out-edge in 24fps media.",
+      "value": {
+        "op": "clip.trim",
+        "clip": "clip_aabbccdd00112233aabbccdd00112233",
+        "edge": "out",
+        "to": { "value": 240, "rate": 24 }
+      }
+    },
+    {
+      "_comment": "Edge case: trim to the very beginning (in = 0).",
+      "value": {
+        "op": "clip.trim",
+        "clip": "clip_aabbccdd00112233aabbccdd00112233",
+        "edge": "in",
+        "to": { "value": 0, "rate": 30 }
+      }
+    },
+    {
+      "_comment": "Error: trim point past the end of the media. Runtime returns FLOW_007.",
+      "value": {
+        "op": "clip.trim",
+        "clip": "clip_aabbccdd00112233aabbccdd00112233",
+        "edge": "in",
+        "to": { "value": 99999, "rate": 30 }
+      }
+    },
+    {
+      "_comment": "Error: clip does not exist. Runtime returns FLOW_002.",
+      "value": {
+        "op": "clip.trim",
+        "clip": "clip_deadbeef00000000deadbeef00000000",
+        "edge": "in",
+        "to": { "value": 90, "rate": 30 }
+      }
+    }
+  ]
+}

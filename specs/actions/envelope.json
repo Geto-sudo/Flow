@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flow.dev/schemas/actions/envelope.v1.json",
+  "version": "1.0.0",
+  "title": "Flow Action Envelope",
+  "description": "The wrapper around every Flow action batch. An agent submits a single envelope containing one or more actions. The envelope carries metadata for audit, attribution, and optimistic concurrency.",
+  "status": "Draft",
+
+  "type": "object",
+  "required": ["v", "id", "ts", "actor", "actions"],
+  "additionalProperties": false,
+  "properties": {
+    "v": {
+      "description": "Envelope schema version. Always 1 for this spec.",
+      "const": 1
+    },
+    "id": {
+      "description": "Unique identifier of the action batch. UUID v7 (time-ordered).",
+      "type": "string",
+      "pattern": "^act_[0-9a-f]{32}$"
+    },
+    "ts": {
+      "description": "Timestamp of the batch submission, ISO 8601 UTC.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "actor": {
+      "description": "Who issued the action batch. Required for audit. Format: 'type:id'.",
+      "type": "string",
+      "pattern": "^(agent:[a-zA-Z0-9._-]+|user:[a-zA-Z0-9._@-]+|plugin:[a-zA-Z0-9._-]+|system)$",
+      "examples": [
+        "agent:claude-sonnet-4.5",
+        "user:alice@example.com",
+        "plugin:ai.upscale",
+        "system"
+      ]
+    },
+    "intent": {
+      "description": "Free-text description of the agent's or user's intent. Optional but strongly recommended for auditability. Surfaces in events and history.",
+      "type": "string",
+      "maxLength": 4096
+    },
+    "actions": {
+      "description": "The list of actions to apply. Applied atomically: all succeed or none.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/action" }
+    },
+    "base_state_hash": {
+      "description": "SHA-256 of the state the agent believes it is operating on. Used for optimistic concurrency control. If the runtime's current state hash does not match, FLOW_015 is returned.",
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  },
+
+  "$defs": {
+    "action": {
+      "description": "A single Flow action. Discriminated by 'op'. The full set of 'op' values is defined in the per-action spec files in this directory.",
+      "type": "object",
+      "required": ["op"],
+      "properties": {
+        "op": {
+          "description": "The action identifier. See per-action spec files for the catalog.",
+          "type": "string",
+          "pattern": "^[a-z_]+\\.[a-z_]+$"
+        }
+      }
+    }
+  },
+
+  "examples": [
+    {
+      "v": 1,
+      "id": "act_0123456789abcdef0123456789abcdef",
+      "ts": "2026-07-17T04:00:00Z",
+      "actor": "agent:claude-sonnet-4.5",
+      "intent": "Trim the intro of the interview and add a bouncy text overlay at the punchline",
+      "actions": [
+        { "op": "clip.trim", "clip": "clip_aabbccdd00112233aabbccdd00112233", "edge": "in", "to": { "value": 90, "rate": 30 } }
+      ]
+    },
+    {
+      "v": 1,
+      "id": "act_0123456789abcdef0123456789abcde0",
+      "ts": "2026-07-17T04:01:00Z",
+      "actor": "user:alice@example.com",
+      "intent": "Render the project to TikTok vertical",
+      "actions": [
+        { "op": "render", "output": { "path": "out.mp4", "format": "mp4" }, "preset": "tiktok-vertical-1080" }
+      ]
+    },
+    {
+      "v": 1,
+      "id": "act_0123456789abcdef0123456789abcde1",
+      "ts": "2026-07-17T04:02:00Z",
+      "actor": "agent:claude-sonnet-4.5",
+      "intent": "Atomic batch: split a clip, then add an effect to each part",
+      "base_state_hash": "abc123...",
+      "actions": [
+        { "op": "clip.split", "clip": "clip_aabbccdd00112233aabbccdd00112233", "at": { "value": 150, "rate": 30 } },
+        { "op": "effect.add", "target": { "type": "clip", "id": "clip_new1" }, "effect": "core.text.burn", "params": { "text": "Part 1" } },
+        { "op": "effect.add", "target": { "type": "clip", "id": "clip_new2" }, "effect": "core.text.burn", "params": { "text": "Part 2" } }
+      ]
+    }
+  ]
+}

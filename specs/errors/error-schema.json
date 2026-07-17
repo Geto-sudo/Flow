@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flow.dev/schemas/errors/error.v1.json",
+  "version": "1.0.0",
+  "title": "Flow Error Response",
+  "description": "The shape of every error response from a Flow runtime. See errors/error-codes.md for the catalog of codes.",
+  "status": "Draft",
+
+  "type": "object",
+  "required": ["code", "name", "category", "severity", "message"],
+  "additionalProperties": true,
+  "properties": {
+    "code": {
+      "description": "Stable machine code from the catalog.",
+      "type": "string",
+      "pattern": "^FLOW_[0-9]{3}$"
+    },
+    "name": {
+      "description": "Human-readable PascalCase name.",
+      "type": "string",
+      "pattern": "^[A-Z][A-Za-z0-9]+$"
+    },
+    "category": {
+      "enum": ["validation", "runtime", "io", "plugin", "auth", "internal"]
+    },
+    "severity": {
+      "enum": ["info", "warning", "error", "fatal"]
+    },
+    "message": {
+      "type": "string",
+      "minLength": 1
+    },
+    "details": {
+      "description": "Structured context. Schema depends on the code (see error-codes.md).",
+      "type": "object"
+    },
+    "hint": {
+      "description": "Actionable suggestion for the caller.",
+      "type": "string"
+    },
+    "documentation_url": {
+      "type": "string",
+      "format": "uri"
+    },
+    "retryable": {
+      "type": "boolean"
+    },
+    "cause": {
+      "description": "The underlying error, if any.",
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#" }
+      ]
+    }
+  },
+
+  "examples": [
+    {
+      "code": "FLOW_001",
+      "name": "TimelineNotFound",
+      "category": "validation",
+      "severity": "error",
+      "message": "Timeline not found: proj_abc123",
+      "details": { "timeline_id": "proj_abc123" },
+      "hint": "Check the project ID. Use flow.project.list to see available projects.",
+      "documentation_url": "https://flow.dev/errors/FLOW_001",
+      "retryable": false,
+      "cause": null
+    },
+    {
+      "code": "FLOW_002",
+      "name": "InvalidClip",
+      "category": "validation",
+      "severity": "error",
+      "message": "Clip clip_xyz789 is not in the current timeline",
+      "details": { "clip_id": "clip_xyz789", "timeline_id": "proj_abc123" },
+      "hint": "Re-probe the timeline via flow.timeline.get and use a valid clip ID.",
+      "documentation_url": "https://flow.dev/errors/FLOW_002",
+      "retryable": false,
+      "cause": null
+    },
+    {
+      "code": "FLOW_103",
+      "name": "GpuOutOfMemory",
+      "category": "runtime",
+      "severity": "error",
+      "message": "GPU device 0 ran out of memory during upscale inference",
+      "details": {
+        "device_id": 0,
+        "requested_mb": 4096,
+        "available_mb": 2048,
+        "effect_id": "ai.upscale"
+      },
+      "hint": "Reduce render resolution, close other GPU applications, or retry on a different device.",
+      "documentation_url": "https://flow.dev/errors/FLOW_103",
+      "retryable": true,
+      "cause": null
+    }
+  ]
+}

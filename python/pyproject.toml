@@ -1,0 +1,72 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "flow-core"
+version = "0.3.0"
+description = "Open runtime for AI video editing — observe, reason, edit, verify."
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "Apache-2.0"}
+authors = [{name = "Flow"}]
+keywords = ["video", "ai", "editing", "multimodal", "runtime"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Multimedia :: Video",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "imageio-ffmpeg>=0.5",     # bundled ffmpeg/ffprobe
+    "numpy>=1.24",
+    "faster-whisper>=1.0",     # speech-to-text
+    "soundfile>=0.12",         # audio decoding
+]
+
+[project.optional-dependencies]
+# Vision stack: CLIP tags + YOLO objects + EasyOCR + face detection
+vision = [
+    "open_clip_torch>=2.24",
+    "torch>=2.0",
+    "torchvision>=0.15",
+    "ultralytics>=8.0",        # YOLOv8
+    "opencv-python>=5.0",
+    "easyocr>=1.7",
+]
+# Audio features beyond VAD: beat detection + emotion
+audio = [
+    "librosa>=0.10",
+    "transformers>=4.40",
+]
+# Speaker diarization
+diarization = [
+    "torch>=2.0",
+    "pyannote.audio>=3.1",
+]
+# Everything
+all = [
+    "open_clip_torch>=2.24",
+    "torch>=2.0",
+    "torchvision>=0.15",
+    "ultralytics>=8.0",
+    "opencv-python>=5.0",
+    "easyocr>=1.7",
+    "librosa>=0.10",
+    "transformers>=4.40",
+    "pyannote.audio>=3.1",
+]
+
+[project.scripts]
+flow = "flow_core.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/flow-project/flow-core"
+
+[tool.setuptools.packages.find]
+include = ["flow_core*"]
+
+[tool.setuptools.package-data]
+"flow_core" = ["py.typed"]

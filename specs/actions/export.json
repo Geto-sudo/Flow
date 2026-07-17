@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flow.dev/schemas/actions/export.v1.json",
+  "version": "1.0.0",
+  "title": "Flow Action: render",
+  "description": "Renders the project (or a time range of the project) to a media file. The render is asynchronous: this action returns a job ID immediately, and the actual rendering happens on a worker. Progress is reported via the FLOW_EVT_101 (JobProgress) event and via the render status tool.",
+  "status": "Draft",
+
+  "type": "object",
+  "required": ["op", "output", "preset"],
+  "additionalProperties": false,
+  "properties": {
+    "op": { "const": "render" },
+    "output": {
+      "description": "The output destination. The path is interpreted relative to the project directory if not absolute.",
+      "type": "object",
+      "required": ["path", "format"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "format": {
+          "enum": ["mp4", "webm", "mov", "mkv", "wav", "mp3", "png_sequence", "jpg_sequence"]
+        }
+      }
+    },
+    "preset": {
+      "description": "A render preset ID. Presets are registered by plugins or built into the runtime. Use flow.effects.list to discover available presets.",
+      "type": "string"
+    },
+    "range": {
+      "description": "Optional time range to render. If omitted, the entire timeline is rendered.",
+      "$ref": "#/$defs/time_range"
+    },
+    "hardware_accel": {
+      "description": "Override the hardware acceleration policy for this render.",
+      "enum": ["auto", "required", "disabled"],
+      "default": "auto"
+    },
+    "priority": {
+      "description": "Job priority. Higher values run first.",
+      "type": "integer",
+      "minimum": -10,
+      "maximum": 10,
+      "default": 0
+    }
+  },
+
+  "$defs": {
+    "rational_time": {
+      "type": "object",
+      "required": ["value", "rate"],
+      "properties": {
+        "value": { "type": "number" },
+        "rate":  { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+    "time_range": {
+      "type": "object",
+      "required": ["start_time", "duration"],
+      "properties": {
+        "start_time": { "$ref": "#/$defs/rational_time" },
+        "duration":    { "$ref": "#/$defs/rational_time" }
+      }
+    }
+  },
+
+  "preconditions": [
+    "The project must have at least one clip (else FLOW_017).",
+    "The render range (if specified) must be within the timeline's duration (else FLOW_017).",
+    "The preset must be registered (else FLOW_018).",
+    "The output path must be writable (else FLOW_201 or FLOW_203)."
+  ],
+
+  "effects": [
+    "A new job is created and a job ID is returned in the action result.",
+    "The render runs asynchronously on a worker.",
+    "On completion, FLOW_EVT_100 (JobStarted), FLOW_EVT_101 (JobProgress), FLOW_EVT_102 (JobStageChanged), and FLOW_EVT_103 (JobCompleted) events are emitted.",
+    "On failure, FLOW_EVT_104 (JobFailed) is emitted and the action result contains the error.",
+    "On cancellation, FLOW_EVT_105 (JobCancelled) is emitted."
+  ],
+
+  "errors": [
+    { "code": "FLOW_017", "when": "The render range is out of bounds." },
+    { "code": "FLOW_018", "when": "The preset is not registered." },
+    { "code": "FLOW_100", "when": "The decode step failed (corrupted media, unsupported codec)." },
+    { "code": "FLOW_101", "when": "The encode step failed (codec configuration error)." },
+    { "code": "FLOW_102", "when": "The mux step failed (container error)." },
+    { "code": "FLOW_103", "when": "A GPU device ran out of memory." },
+    { "code": "FLOW_104", "when": "Hardware acceleration was required but no GPU is available." },
+    { "code": "FLOW_105", "when": "An AI effect in the pipeline failed." },
+    { "code": "FLOW_107", "when": "The render was cancelled by the user." },
+    { "code": "FLOW_108", "when": "The render exceeded the maximum allowed time." },
+    { "code": "FLOW_201", "when": "The output path is not writable." },
+    { "code": "FLOW_203", "when": "The disk is full." }
+  ],
+
+  "examples": [
+    {
+      "_comment": "Happy path: render the entire timeline to MP4 with a TikTok vertical preset.",
+      "value": {
+        "op": "render",
+        "output": { "path": "out.mp4", "format": "mp4" },
+        "preset": "tiktok-vertical-1080"
+      }
+    },
+    {
+      "_comment": "Happy path: render only the first 60 seconds.",
+      "value": {
+        "op": "render",
+        "output": { "path": "preview.mp4", "format": "mp4" },
+        "preset": "tiktok-vertical-1080",
+        "range": {
+          "start_time": { "value": 0, "rate": 30 },
+          "duration":   { "value": 1800, "rate": 30 }
+        }
+      }
+    },
+    {
+      "_comment": "Happy path: render a frame sequence for color grading.",
+      "value": {
+        "op": "render",
+        "output": { "path": "frames/", "format": "png_sequence" },
+        "preset": "uncompressed-1080"
+      }
+    },
+    {
+      "_comment": "Edge case: require hardware acceleration, but no GPU is available. Runtime returns FLOW_104.",
+      "value": {
+        "op": "render",
+        "output": { "path": "out.mp4", "format": "mp4" },
+        "preset": "tiktok-vertical-1080",
+        "hardware_accel": "required"
+      }
+    }
+  ]
+}
