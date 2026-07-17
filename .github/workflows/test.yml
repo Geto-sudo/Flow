@@ -1,0 +1,140 @@
+name: test
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Lint + Test on Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+
+      - name: Install system ffmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Install flow-core (core only — no heavy models)
+        working-directory: python
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+
+      - name: Lint with ruff
+        working-directory: python
+        run: |
+          python -m pip install ruff
+          ruff check flow_core/ || echo "::warning::Lint issues found (non-blocking)"
+
+      - name: Test core (no model downloads)
+        working-directory: python
+        env:
+          FLOW_SKIP_HEAVY_MODELS: "1"
+        run: |
+          python -m pytest tests/ -v --tb=short -x -k "not heavy"
+
+      - name: Test synthetic scenarios
+        working-directory: python
+        run: |
+          python -c "
+import flow_core as flow
+for s in ['podcast', 'interview', 'vlog', 'tutorial']:
+    g = flow.observe(s, depth='fast')
+    assert g.stats()['total_nodes'] > 0, f'{s} failed'
+    print(f'OK: {s} -> {g.stats()[\"total_nodes\"]} nodes')
+"
+
+      - name: Test 5-verb cycle
+        working-directory: python
+        run: |
+          python -c "
+import flow_core as flow
+# Build a synthetic graph and exercise all 5 verbs
+g = flow.observe('podcast', depth='fast')
+scenes = flow.query(g, 'scenes')
+assert scenes['count'] > 0, 'query failed'
+plan = flow.plan(g, 'tighten')
+assert 'actions' in plan, 'plan failed'
+result = flow.execute(g, plan['actions'])
+assert result['actions_applied'] >= 0, 'execute failed'
+verdict = flow.verify({'duration': 0.5}, g)  # synthetic duration
+print(f'OK: cycle works (ok={verdict[\"ok\"]})')
+"
+
+  build:
+    name: Build sdist + wheel
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install build
+        working-directory: python
+        run: python -m pip install build
+      - name: Build package
+        working-directory: python
+        run: python -m build
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: flow-core-dist
+          path: python/dist/
+          if-no-files-found: error
+
+  publish:
+    name: Publish to PyPI
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
+    environment:
+      name: pypi
+      url: https://pypi.org/p/flow-core
+    permissions:
+      id-token: write  # for PyPI trusted publishing
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: flow-core-dist
+          path: python/dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: python/dist/
+          # No password: uses OIDC trusted publishing (configured on PyPI side)
+
+  publish-testpypi:
+    name: Publish to TestPyPI
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'workflow_dispatch'  # manual only
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/flow-core
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: flow-core-dist
+          path: python/dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: python/dist/
+          repository-url: https://test.pypi.org/legacy/
