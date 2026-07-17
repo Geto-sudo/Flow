@@ -38,6 +38,12 @@ flow_execute(graph_id, actions, output_path=None)
 flow_verify(expected, actual, re_transcribe=False, re_detect=False)
     Compare expected state to actual rendered output.
 
+flow_context(graph_id, query="", budget_tokens=2000, per_node_max_chars=80)
+    Compress a ProjectGraph into a text block sized to fit inside an
+    LLM context window. Routes the budget based on query intent.
+    Use this when reasoning about a video but the full graph would
+    overflow the context window.
+
 ────────────────────────────────────────────────────────────────────────
 """
 
@@ -207,6 +213,45 @@ TOOLS = [
             "required": ["expected", "actual"],
         },
     },
+    {
+        "name": "flow_context",
+        "description": (
+            "Compress a stored ProjectGraph into a text block sized to fit "
+            "inside an LLM context window. The VVM Context Engine detects "
+            "query intent (scenes / transcript / people / objects / audio / "
+            "temporal / edit / summary) and allocates the token budget per "
+            "node type so the LLM sees the most useful information first. "
+            "Use this when you need to reason about a video but the full "
+            "graph would overflow the context window."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "graph_id": {"type": "string"},
+                "query": {
+                    "type": "string",
+                    "default": "",
+                    "description": (
+                        "Free-form question/intent. Routes the budget. "
+                        "Examples: 'cut the silences', 'who is on camera', "
+                        "'what objects are visible', 'describe this video'. "
+                        "Empty string = balanced summary."
+                    ),
+                },
+                "budget_tokens": {
+                    "type": "integer",
+                    "default": 2000,
+                    "description": "Approx max tokens for the returned text.",
+                },
+                "per_node_max_chars": {
+                    "type": "integer",
+                    "default": 80,
+                    "description": "Truncate individual node lines to this.",
+                },
+            },
+            "required": ["graph_id"],
+        },
+    },
 ]
 
 
@@ -273,12 +318,30 @@ def _handle_verify(args: Dict[str, Any]) -> Dict[str, Any]:
     )
 
 
+def _handle_context(args: Dict[str, Any]) -> Dict[str, Any]:
+    import flow_core as flow
+    g = _get_graph(args["graph_id"])
+    text = flow.context(
+        g,
+        query=args.get("query", ""),
+        budget_tokens=int(args.get("budget_tokens", 2000)),
+        per_node_max_chars=int(args.get("per_node_max_chars", 80)),
+    )
+    return {
+        "graph_id": args["graph_id"],
+        "query": args.get("query", ""),
+        "budget_tokens": int(args.get("budget_tokens", 2000)),
+        "context_text": text,
+    }
+
+
 HANDLERS = {
     "flow_observe": _handle_observe,
     "flow_query": _handle_query,
     "flow_plan": _handle_plan,
     "flow_execute": _handle_execute,
     "flow_verify": _handle_verify,
+    "flow_context": _handle_context,
 }
 
 
@@ -306,6 +369,7 @@ def _handle_request(req: dict) -> dict:
         return _make_response(req_id, {
             "protocolVersion": "2024-11-05",
             "serverInfo": {"name": "flow-core", "version": "0.3.0"},
+            "capabilities": {"tools": {}},
             "capabilities": {"tools": {}},
         })
 

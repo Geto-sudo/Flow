@@ -30,12 +30,14 @@ from .video_parser import (
 )
 from .planner import plan as _plan
 from .executor import execute as _execute
+from .context_engine import ContextEngine
 
 from typing import Optional
 
 __version__ = "0.3.0"
 __all__ = [
-    "observe", "query", "plan", "execute", "verify",
+    "observe", "query", "plan", "execute", "verify", "context",
+    "ContextEngine",
     "ProjectGraph",
     "Clip", "Scene", "TranscriptSegment", "Person",
     "DetectedObject", "Asset", "GraphNode", "GraphEdge",
@@ -294,3 +296,41 @@ def verify(expected: dict, actual, re_transcribe: bool = False,
     return _verify(expected, actual,
                    re_transcribe=re_transcribe,
                    re_detect=re_detect)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# v0.4 — Context Engine (VVM): compress graph for LLM prompts
+# ═══════════════════════════════════════════════════════════════════════════
+
+def context(graph: ProjectGraph, query: str = "",
+            budget_tokens: int = 2000,
+            per_node_max_chars: int = 80) -> str:
+    """Compress a ProjectGraph into LLM-friendly text under a token budget.
+
+    This is the **VVM Context Engine**: it detects query intent
+    (scenes / transcript / people / objects / audio / temporal / edit /
+    summary), allocates the budget per node type, and renders a compact
+    representation that fits inside an LLM context window.
+
+    For a 1-hour podcast with ~200 nodes, a 2000-token budget is
+    realistic and preserves enough structure for the LLM to reason
+    about edits.
+
+    Args:
+        graph: A ProjectGraph from observe().
+        query: Free-form question/intent to route the budget.
+            Empty string returns a balanced summary.
+        budget_tokens: Approx max tokens for the returned text.
+        per_node_max_chars: Truncate individual node lines to this.
+
+    Returns:
+        A single text block, ready to be pasted into a system prompt.
+
+    Example:
+        >>> g = flow.observe("podcast.mp4", depth="full")
+        >>> ctx = flow.context(g, "cut the silences", budget_tokens=2000)
+        >>> # paste into your LLM call's system prompt
+    """
+    return ContextEngine(graph).serve(query=query,
+                                      budget_tokens=budget_tokens,
+                                      per_node_max_chars=per_node_max_chars)
